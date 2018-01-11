@@ -30,7 +30,6 @@ namespace OMSNF_FEP.ServiceManager
         long subCount = 0;
         private SUB_Services() {
             StartSublisherService();
-            StartPorcessorService();
         }
         public void AddSubService(string ipport,string newtopic)
         {
@@ -145,11 +144,11 @@ namespace OMSNF_FEP.ServiceManager
                 
                 Task.Factory.StartNew(() =>
                 {
+                    MSG_FEPQueryProcessor frpquery_processor = MSG_FEPQueryProcessor.Instance;
+                    ct = cts.Token;
                     while (true)
                     {
                         Console.WriteLine("StartPorcessorService2");
-                        MSG_FEPQueryProcessor frpquery_processor = MSG_FEPQueryProcessor.Instance;
-                        ct = cts.Token;
                         if (sub_block.Count != 0)
                         {
                             List<byte[]> l = sub_block.Take(ct);
@@ -179,6 +178,7 @@ namespace OMSNF_FEP.ServiceManager
                             logger.Info("Sub End Recv data ! ");
                         }
                     }
+                Thread.Sleep(99);
                 },cts.Token);
             }
             catch (Exception e)
@@ -187,45 +187,6 @@ namespace OMSNF_FEP.ServiceManager
             }
             Console.WriteLine("End Sub Services ");
         }
-        public void StartPorcessorService()
-        {
-            Console.WriteLine("StartPorcessorService1");
-            Task.Run(() =>
-            {
-                Console.WriteLine("StartPorcessorService2");
-                MSG_FEPQueryProcessor frpquery_processor = MSG_FEPQueryProcessor.Instance;
-                ct = cts.Token;
-                while (sub_block.Count != 0)
-                {
-                    List<byte[]> l = sub_block.Take(ct);
-                    string topic = Encoding.UTF8.GetString((byte[])l[0]);
-                    logger.Info("FEP Receive a Subscribed topic " + topic);
-                    string msgtype = topic.Split('.')[2];
-                    Jsunfutures.Messages.MessageFlag mf;
-                    Enum.TryParse(msgtype, out mf);
-                    byte[][] a = l.ToArray<byte[]>();
-                    switch (mf)
-                    {
-                        case Jsunfutures.Messages.MessageFlag.MsgFepquery:
-                            Jsunfutures.Messages.FEPQuery oMsg = Jsunfutures.Messages.FEPQuery.Parser.ParseFrom(a[1]);
-                            logger.Info("SUB<- " + (++subCount) + " topic[" + topic + "] " + oMsg.ToString());
-                            logger.Info("OmsASModeFlag is " + AAWatch.Instance.aaflag);
-                            if (AAWatch.Instance.aaflag == Jsunfutures.Messages.OmsASModeFlag.OmsasModeStandby) continue;
-                            Task.Run(() => frpquery_processor.Process(oMsg));
-                            break;
-                        case Jsunfutures.Messages.MessageFlag.MsgUserdata:
-                            Jsunfutures.Messages.SSO ssoMsg = Jsunfutures.Messages.SSO.Parser.ParseFrom(a[1]);
-                            logger.Info("SUB<- " + (++subCount) + " topic[" + topic + "] " + ssoMsg.ToString());
-                            logger.Info("OmsASModeFlag is " + AAWatch.Instance.aaflag);
-                            if (AAWatch.Instance.aaflag == Jsunfutures.Messages.OmsASModeFlag.OmsasModeStandby) continue;
-                            Task.Run(() => frpquery_processor.Process(ssoMsg));
-                            break;
-                    }
-                    logger.Info("Sub End Recv data ! ");
-                }
-            },cts.Token);
-        }
-
         public void AddTopic(string topic)
         {
             string[] ssmrt = topic.Split('.');
